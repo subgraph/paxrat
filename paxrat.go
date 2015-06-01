@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"os"
 	"os/exec"
+	"os/user"
 )
 
 var configvar string
@@ -82,6 +83,10 @@ func SetWithPaxctl(path string, flags string) (err error) {
 }
 
 func SetFlags(path string, flags string) (err error) {
+	root, err := RunningAsRoot()
+	if !root {
+		log.Fatal("paxrat must be run as root to set PaX flags.")
+	}
 	exists, err := FileExists(path)
 	if !exists {
 		fmt.Printf("%s does not exist, cannot set PaX flags: %s\n",
@@ -171,6 +176,16 @@ func IsXattrSupported(path string) (result bool, err error) {
 	return
 }
 
+func RunningAsRoot() (result bool, err error) {
+	current, err := user.Current()
+	if err != nil {
+		fmt.Println(err)
+	}
+	if current.Uid == "0" && current.Gid == "0" && current.Username == "root" {
+		result = true
+	}
+	return
+}
 
 func main() {
 	flag.Parse()
