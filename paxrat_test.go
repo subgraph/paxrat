@@ -5,10 +5,16 @@ import (
 	"os"
 	"testing"
 	"fmt"
-	"encoding/json"
 	"time"
 )
 
+func createTestConfig(path string, contents string) (err error) {
+	err = ioutil.WriteFile(path, []byte(contents), 0600)
+	if err != nil {
+		return
+	}
+	return
+}
 
 func TestRunWatcher1(t *testing.T) {
 	dir, err := ioutil.TempDir("", "inotify")
@@ -18,24 +24,35 @@ func TestRunWatcher1(t *testing.T) {
 	defer os.RemoveAll(dir)
 	files := []string{dir + "/test1", dir + "/test2"}
 	for _, file := range files {
-		_, err = os.OpenFile(file, os.O_WRONLY|os.O_CREATE, 0666)
+		_, err = os.OpenFile(file, os.O_WRONLY|os.O_CREATE, 000)
 		if err != nil {
 			t.Fatalf("creating test file: %s", err)
 		}
 	}
-	var data config
-	err = json.Unmarshal(
-		[]byte(fmt.Sprintf("{ \"%s/test1\":\"E\",\n \"%s/test2\":\"E\" }", dir, dir)), &data)
+	testJson := fmt.Sprintf(
+	"{\"%s/test1\": {" +
+	"\"flags\": \"mr\"," +
+	"\"nonroot\": false}," +
+	"\"%s/test2\": {" +
+	"\"flags\": \"E\"," +
+	"\"nonroot\": false}}", dir, dir)
+	configPath := dir + "paxrat_conf.json"
+	Conf = new(Config)
+	err = createTestConfig(configPath, testJson)
+	if err != nil {
+		t.Fatalf("Could not create test config: %s", err)
+	}
+	err = Conf.readConfig(configPath)
 	if err != nil {
 		t.Fatalf("Could not load config: %s", err)
 	}
-	watcher, err := initWatcher(data)
+	watcher, err := initWatcher()
 	if err != nil {
 		t.Fatalf("Failed to init watcher: %s", err)
 	}
 	done := make(chan bool)
 	go func(done chan bool) {
-		runWatcher(watcher, data)
+		runWatcher(watcher)
 	}(done)
 	err = os.Remove(files[0])
 	if err != nil {

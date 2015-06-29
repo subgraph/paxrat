@@ -13,16 +13,27 @@ import (
 	"os/user"
 	"path/filepath"
 	"strings"
+
 	"golang.org/x/exp/inotify"
 )
 
+
 var configvar string
+var testvar bool
 var watchvar bool
 var flagsvar string
 var binaryvar string
-type config map[string]string
+var nonrootvar bool
+type Setting struct {
+	Flags		string 	`json:"flags"`
+	Nonroot 	bool	`json:"nonroot"`
+}
+type Config struct {
+	Settings map[string]Setting
+}
 var InotifyFlags uint32
 var InotifyDirFlags uint32
+var Conf *Config
 
 func init() {
 	InotifyFlags = (inotify.IN_DONT_FOLLOW | inotify.IN_ATTRIB |
@@ -30,23 +41,28 @@ func init() {
 		inotify.IN_MOVED_TO)
 	InotifyDirFlags = (inotify.IN_DONT_FOLLOW | inotify.IN_CREATE |
 		inotify.IN_DELETE_SELF | inotify.IN_MOVE_SELF | inotify.IN_MOVED_TO)
-
+	Conf = new(Config)
 	flag.StringVar(&configvar, "c", "/etc/paxrat/paxrat.conf",
 		"Pax flags configuration file")
+	flag.BoolVar(&testvar, "t", false,
+		"Test the config file and then exit")
 	flag.BoolVar(&watchvar, "w", false,
 		"Run paxrat in watch mode")
 	flag.StringVar(&flagsvar, "s", "", 
 		"Set PaX flags for a single binary (must also specify binary)")
+	flag.BoolVar(&nonrootvar, "n", false,
+		"Set nonroot variable for a single binary (needed to set flags on a non-root owned binary")
 	flag.StringVar(&binaryvar, "b", "",
 		"Path to a binary for use with set option")
 }
 
-func readConfig(path string) (data config, err error) {
+func (conf *Config) readConfig(path string) (err error) {
 	file, err := ioutil.ReadFile(path)
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = json.Unmarshal(file, &data)
+	var data = &conf.Settings
+	err = json.Unmarshal(file, data)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -93,16 +109,10 @@ func setWithPaxctl(path string, flags string) (err error) {
 	return
 }
 
-func setFlags(path string, flags string) (err error) {
+func setFlags(path string, flags string, nonroot bool) (err error) {
 	root, err := runningAsRoot()
 	if !root {
 		log.Fatal("paxrat must be run as root to set PaX flags.")
-	}
-	exists := pathExists(path)
-	if !exists {
-		fmt.Printf("%s does not exist, cannot set PaX flags: %s\n",
-			path, flags)
-		return
 	}
 	err = validateFlags(flags)
 	if err != nil {
@@ -110,6 +120,41 @@ func setFlags(path string, flags string) (err error) {
 	}
 	supported, err := isXattrSupported()
 	if err != nil {
+		return
+	}
+	fiPath, err := os.Lstat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			err = fmt.Errorf("%s does not exist, cannot set flags", path)
+		}
+		return
+	}
+	linkUid := fiPath.Sys().(*syscall.Stat_t).Uid
+	// Throw error if nonroot option is not set but the file is owned by a user other than root
+	if (!nonroot && linkUid > 0) {
+		err = fmt.Errorf(
+			"Cannot set PaX flags on %s. Owner of symlink did not match owner of symlink target\n",
+		path)
+		return
+	}
+	// Resolve the symlink target
+	realpath, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return
+	}
+	fiRPath, err := os.Lstat(realpath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			err = fmt.Errorf("%s does not exist, cannot set flags", path)
+		}
+		return
+	}
+	targetUid := fiRPath.Sys().(*syscall.Stat_t).Uid
+	// If nonroot is set then throw an error if the owner of the file is different than the owner of the symlink target
+	if (nonroot && targetUid != linkUid) {
+		err = fmt.Errorf(
+			"Cannot set PaX flags on %s. Owner of symlink did not match owner of symlink target\n",
+			path)
 		return
 	}
 	fmt.Printf("Setting '%s' PaX flags on %s\n", flags, path)
@@ -128,9 +173,9 @@ func setFlags(path string, flags string) (err error) {
 	return
 }
 
-func setFlagsFromConfig(data config) {
-	for path, flags := range data {
-		err := setFlags(path, flags)
+func setFlagsFromConfig() {
+	for path, setting := range (*Conf).Settings {
+		err := setFlags(path, setting.Flags, setting.Nonroot)
 		if err != nil {
 			fmt.Println(err)
 		}
@@ -214,19 +259,16 @@ func addWatchToClosestPath(watcher *inotify.Watcher, path string) {
 
 }
 
-func initWatcher(data config) (watcher *inotify.Watcher, err error) {
+func initWatcher() (watcher *inotify.Watcher, err error) {
 	watcher, err = inotify.NewWatcher()
 	if err != nil {
 		return
 	}
-	for path, flags := range data {
+	for path, setting := range (*Conf).Settings {
 		addWatchToClosestPath(watcher, path)
 		watcher.RemoveWatch(path)
-		err := setFlags(path, flags)
+		err := setFlags(path, setting.Flags, setting.Nonroot)
 		if err != nil {
-			if err.(syscall.Errno) == syscall.ENOENT {
-				fmt.Println("Not found")
-			}
 			fmt.Println(err)
 		}
 		addWatchToClosestPath(watcher, path)
@@ -235,25 +277,25 @@ func initWatcher(data config) (watcher *inotify.Watcher, err error) {
 }
 
 // TODO: Resolve some corner cases like watches not set after create, delete, create, move
-func runWatcher(watcher *inotify.Watcher, data config) {
+func runWatcher(watcher *inotify.Watcher) {
 	log.Printf("Starting paxrat watcher")
 	for {
 		select {
 		case ev := <-watcher.Event:
 			if ev.Mask == inotify.IN_CREATE {
-					if _, ok := data[ev.Name]; ok {
+				if _, ok := (*Conf).Settings[ev.Name]; ok {
 					watcher.AddWatch(ev.Name, InotifyFlags)
 					log.Printf("File created: %s\n", ev.Name)
 				}
 			} else if ev.Mask == inotify.IN_DELETE_SELF || ev.Mask == inotify.IN_MOVE_SELF {
-				if _, ok := data[ev.Name]; ok {
+				if _, ok := (*Conf).Settings[ev.Name]; ok {
 					log.Printf("File deleted: %s\n", ev.Name)
 					parent := filepath.Dir(ev.Name)
 					watcher.AddWatch(parent, InotifyDirFlags)
 					continue
 				}
 			} else if ev.Mask == inotify.IN_ATTRIB {
-				if _, ok := data[ev.Name]; ok {
+				if _, ok := (*Conf).Settings[ev.Name]; ok {
 					exists := pathExists(ev.Name)
 					if !exists {
 						log.Printf("File deleted: %s\n", ev.Name)
@@ -265,10 +307,13 @@ func runWatcher(watcher *inotify.Watcher, data config) {
 					}
 				}
 			}
-			if _, ok := data[ev.Name]; ok {
+			if settings, ok := (*Conf).Settings[ev.Name]; ok {
 				if ev.Mask != inotify.IN_IGNORED {
 					watcher.RemoveWatch(ev.Name)
-					setFlags(ev.Name, data[ev.Name])
+					err := setFlags(ev.Name, settings.Flags, settings.Nonroot)
+					if err != nil {
+						fmt.Println(err)
+					}
 					addWatchToClosestPath(watcher, ev.Name)
 				}
 			}
@@ -281,22 +326,35 @@ func runWatcher(watcher *inotify.Watcher, data config) {
 
 func main() {
 	flag.Parse()
-	if binaryvar != "" && flagsvar != "" {
-		setFlags(binaryvar, flagsvar)
+	if testvar {
+		fmt.Printf("Reading config from: %s\n", configvar)
+		err := Conf.readConfig(configvar)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("Configuration is valid\n")
+		os.Exit(0)
+	} else if binaryvar != "" && flagsvar != "" {
+		err := setFlags(binaryvar, flagsvar, nonrootvar)
+		if err != nil {
+			fmt.Println(err)
+		}
+		os.Exit(0)
 	} else {
 		fmt.Printf("Reading config from: %s\n", configvar)
-		data, err := readConfig(configvar)
+		err := Conf.readConfig(configvar)
 		if err != nil {
 			log.Fatal(err)
 		}
 		if watchvar {
-			watcher, err := initWatcher(data)
+			watcher, err := initWatcher()
 			if err != nil {
 				log.Fatalf("Could not initialize watcher: %s", err)
 			}
-			runWatcher(watcher, data)
+			runWatcher(watcher)
 		} else {
-			setFlagsFromConfig(data)
+			setFlagsFromConfig()
+			os.Exit(0)
 		}
 	}
 }
