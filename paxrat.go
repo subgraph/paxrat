@@ -231,7 +231,8 @@ func isXattrSupported() (result bool, err error) {
 	setXattrErr := syscall.Setxattr("/proc/self/exe", "user.test xattr", []byte("test xattr data"), 0)
 	if setXattrErr != nil {
 		errno := setXattrErr.(syscall.Errno)
-		if errno == syscall.EOPNOTSUPP {
+		// syscall.Setxattr will return 'read-only filesystem' errors on a live-disc in live mode
+		if errno == syscall.EOPNOTSUPP || errno == syscall.EROFS {
 			result = false
 		} else {
 			err = setXattrErr
@@ -244,6 +245,7 @@ func runningAsRoot() (result bool, err error) {
 	current, err := user.Current()
 	if err != nil {
 		log.Println(err)
+		return
 	}
 	if current.Uid == "0" && current.Gid == "0" && current.Username == "root" {
 		result = true
