@@ -184,6 +184,16 @@ func setFlags(path string, flags string, nonroot bool) (err error) {
 	return
 }
 
+func setFlagsWatchMode(watcher *inotify.Watcher, path string, flags string, nonroot bool) (err error) {
+	watcher.RemoveWatch(path)
+	setFlags(path, flags, nonroot)
+	if err != nil {
+		return(err)
+	}
+	addWatchToClosestPath(watcher, path)
+	return
+}
+
 func setFlagsFromConfig() {
 	for path, setting := range (*Conf).Settings {
 		err := setFlags(path, setting.Flags, setting.Nonroot)
@@ -254,17 +264,11 @@ func runningAsRoot() (result bool, err error) {
 }
 
 func addWatchToClosestPath(watcher *inotify.Watcher, path string) {
-	parent := filepath.Dir(path)
 	err := watcher.AddWatch(path, InotifyFlags)
-	for !pathExists(parent) && parent != "" {
-		path := strings.Split(parent, "/")
-		parent = strings.Join(path[:len(path)-1], "/")
-	}
-	if parent != "" {
-		err = watcher.AddWatch(parent, InotifyDirFlags)
-		if err != nil {
-			msg := fmt.Sprintf("watcher AddWatch error: %s", err)
-			LogWriter.Err(msg)
+	for err != nil && err.(*os.PathError).Err == syscall.ENOENT && path != "/" {
+		path = filepath.Dir(path)
+		if path != "/" {
+			err = watcher.AddWatch(path, InotifyDirFlags)
 		}
 	}
 
@@ -278,13 +282,11 @@ func initWatcher() (watcher *inotify.Watcher, err error) {
 	}
 	for path, setting := range (*Conf).Settings {
 		addWatchToClosestPath(watcher, path)
-		watcher.RemoveWatch(path)
-		err := setFlags(path, setting.Flags, setting.Nonroot)
+		err = setFlagsWatchMode(watcher, path, setting.Flags, setting.Nonroot)
 		if err != nil {
 			msg := fmt.Sprintf("setFlags error in initWatcher: %s", err)
 			LogWriter.Err(msg)
 		}
-		addWatchToClosestPath(watcher, path)
 	}
 	return
 }
@@ -300,6 +302,13 @@ func runWatcher(watcher *inotify.Watcher) {
 					watcher.AddWatch(ev.Name, InotifyFlags)
 					msg := fmt.Sprintf("File created: %s\n", ev.Name)
 					LogWriter.Info(msg)
+				}
+			// Catch directory creation events for non-existent directories in executable path
+			} else if ev.Mask == (inotify.IN_CREATE | inotify.IN_ISDIR) {
+				for path, _ := range (*Conf).Settings {
+					if strings.HasPrefix(path, ev.Name) {
+						addWatchToClosestPath(watcher, path)
+					}
 				}
 			} else if ev.Mask == inotify.IN_DELETE_SELF || ev.Mask == inotify.IN_MOVE_SELF {
 				if _, ok := (*Conf).Settings[ev.Name]; ok {
@@ -326,13 +335,11 @@ func runWatcher(watcher *inotify.Watcher) {
 			}
 			if settings, ok := (*Conf).Settings[ev.Name]; ok {
 				if ev.Mask != inotify.IN_IGNORED {
-					watcher.RemoveWatch(ev.Name)
-					err := setFlags(ev.Name, settings.Flags, settings.Nonroot)
+					err := setFlagsWatchMode(watcher, ev.Name, settings.Flags, settings.Nonroot)
 					if err != nil {
 						msg := fmt.Sprintf("watch mode setFlags error: %s", err)
 						LogWriter.Err(msg)
 					}
-					addWatchToClosestPath(watcher, ev.Name)
 				}
 			}
 		case err := <-watcher.Error:

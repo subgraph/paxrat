@@ -69,3 +69,43 @@ func TestRunWatcher1(t *testing.T) {
 	time.Sleep(1 * time.Second)
 }
 
+func TestRunWatcher2(t *testing.T) {
+	dir, err := ioutil.TempDir("", "inotify")
+	if err != nil {
+		t.Fatalf("TempDir failed: %s", err)
+	}
+	defer os.RemoveAll(dir)
+	testJson := fmt.Sprintf(
+		"{\"%s/1/2/3/4/5/6/7/8/9/10/test1\": {" +
+		"\"flags\": \"mr\"," +
+		"\"nonroot\": false}}", dir)
+	configPath := dir + "paxrat_conf.json"
+	Conf = new(Config)
+	err = createTestConfig(configPath, testJson)
+	if err != nil {
+		t.Fatalf("Could not create test config: %s", err)
+	}
+	err = Conf.readConfig(configPath)
+	if err != nil {
+		t.Fatalf("Could not load config: %s", err)
+	}
+	watcher, err := initWatcher()
+	if err != nil {
+		fmt.Println(dir)
+		t.Fatalf("Failed to init watcher: %s", err)
+	}
+	done := make(chan bool)
+	go func(done chan bool) {
+		runWatcher(watcher)
+	}(done)
+	time.Sleep(1 * time.Second)
+	os.MkdirAll(dir + "/1/2/3/4/5/6/7/8/9/10", 0600 )
+	time.Sleep(1 * time.Second)
+	file := dir + "/1/2/3/4/5/6/7/8/9/10/test1"
+	fmt.Printf("Creating test file: %s", file)
+	os.OpenFile(file, os.O_WRONLY|os.O_CREATE, 000)
+	if err != nil {
+		t.Fatalf("creating test file: %s", err)
+	}
+}
+
