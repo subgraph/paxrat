@@ -1,10 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
-	"fmt"
 	"time"
 )
 
@@ -30,12 +30,12 @@ func TestRunWatcher1(t *testing.T) {
 		}
 	}
 	testJson := fmt.Sprintf(
-	"{\"%s/test1\": {" +
-	"\"flags\": \"mr\"," +
-	"\"nonroot\": false}," +
-	"\"%s/test2\": {" +
-	"\"flags\": \"E\"," +
-	"\"nonroot\": false}}", dir, dir)
+		`{"%s/test1": {`+
+			`"flags": "mr",`+
+			`"nonroot": false},`+
+			`"%s/test2": {`+
+			`"flags": "E",`+
+			`"nonroot": false}}`, dir, dir)
 	configPath := dir + "paxrat_conf.json"
 	Conf = new(Config)
 	err = createTestConfig(configPath, testJson)
@@ -58,7 +58,7 @@ func TestRunWatcher1(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Could not remove testFile1: %s", err)
 	}
-	err = os.Rename(files[1], dir + "moved")
+	err = os.Rename(files[1], dir+"moved")
 	if err != nil {
 		t.Fatalf("Could not move/rename TestFile2: %s", err)
 	}
@@ -76,9 +76,9 @@ func TestRunWatcher2(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 	testJson := fmt.Sprintf(
-		"{\"%s/1/2/3/4/5/6/7/8/9/10/test1\": {" +
-		"\"flags\": \"mr\"," +
-		"\"nonroot\": false}}", dir)
+		`{"%s/1/2/3/4/5/6/7/8/9/10/test1": {`+
+			`"flags": "mr",`+
+			`"nonroot": false}}`, dir)
 	configPath := dir + "paxrat_conf.json"
 	Conf = new(Config)
 	err = createTestConfig(configPath, testJson)
@@ -99,7 +99,7 @@ func TestRunWatcher2(t *testing.T) {
 		runWatcher(watcher)
 	}(done)
 	time.Sleep(1 * time.Second)
-	os.MkdirAll(dir + "/1/2/3/4/5/6/7/8/9/10", 0600 )
+	os.MkdirAll(dir+"/1/2/3/4/5/6/7/8/9/10", 0600)
 	time.Sleep(1 * time.Second)
 	file := dir + "/1/2/3/4/5/6/7/8/9/10/test1"
 	fmt.Printf("Creating test file: %s", file)
@@ -108,4 +108,3 @@ func TestRunWatcher2(t *testing.T) {
 		t.Fatalf("creating test file: %s", err)
 	}
 }
-
