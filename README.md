@@ -36,12 +36,10 @@ The following is an example configuration:
 ```json
 {
   "/usr/lib/iceweasel/iceweasel": {                                                     
-       "flags": "pm",                                                              
-       "nonroot": false                                                             
+    "flags": "pm"
   },                                                                            
   "/usr/lib/iceweasel/plugin-container": {                                                                  
-    "flags": "m",                                                               
-    "nonroot": false                                                             
+    "flags": "m"
   },
   "/home/user/.local/share/torbrowser/tbb/x86_64/tor-browser_en-US/Browser/firefox": {
     "flags": "pm",

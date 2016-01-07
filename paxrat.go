@@ -1,23 +1,22 @@
 package main
 
 import (
-	"flag"
-	"io/ioutil"
 	"encoding/json"
-	"regexp"
+	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"log/syslog"
-	"syscall"
 	"os"
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"syscall"
 
 	"golang.org/x/exp/inotify"
 )
-
 
 var configvar string
 var testvar bool
@@ -25,13 +24,15 @@ var watchvar bool
 var flagsvar string
 var binaryvar string
 var nonrootvar bool
+
 type Setting struct {
-	Flags		string 	`json:"flags"`
-	Nonroot 	bool	`json:"nonroot"`
+	Flags   string `json:"flags"`
+	Nonroot bool   `json:"nonroot,omitempty"`
 }
 type Config struct {
 	Settings map[string]Setting
 }
+
 var InotifyFlags uint32
 var InotifyDirFlags uint32
 var Conf *Config
@@ -55,7 +56,7 @@ func init() {
 		"Test the config file and then exit")
 	flag.BoolVar(&watchvar, "w", false,
 		"Run paxrat in watch mode")
-	flag.StringVar(&flagsvar, "s", "", 
+	flag.StringVar(&flagsvar, "s", "",
 		"Set PaX flags for a single binary (must also specify binary)")
 	flag.BoolVar(&nonrootvar, "n", false,
 		"Set nonroot variable for a single binary (needed to set flags on a non-root owned binary")
@@ -85,8 +86,8 @@ func pathExists(path string) (result bool) {
 
 func validateFlags(flags string) (err error) {
 	match, _ := regexp.MatchString("(?i)[^pemrxs]", flags)
-    	if match {
-		err = fmt.Errorf("Bad characters found in PaX flags: %s", 
+	if match {
+		err = fmt.Errorf("Bad characters found in PaX flags: %s",
 			flags)
 	}
 	return
@@ -139,10 +140,10 @@ func setFlags(path string, flags string, nonroot bool) (err error) {
 	}
 	linkUid := fiPath.Sys().(*syscall.Stat_t).Uid
 	// Throw error if nonroot option is not set but the file is owned by a user other than root
-	if (!nonroot && linkUid > 0) {
+	if !nonroot && linkUid > 0 {
 		err = fmt.Errorf(
 			"Cannot set PaX flags on %s. Owner of symlink did not match owner of symlink target\n",
-		path)
+			path)
 		return
 	}
 	// Resolve the symlink target
@@ -159,7 +160,7 @@ func setFlags(path string, flags string, nonroot bool) (err error) {
 	}
 	targetUid := fiRPath.Sys().(*syscall.Stat_t).Uid
 	// If nonroot is set then throw an error if the owner of the file is different than the owner of the symlink target
-	if (nonroot && targetUid != linkUid) {
+	if nonroot && targetUid != linkUid {
 		err = fmt.Errorf(
 			"Cannot set PaX flags on %s. Owner of symlink did not match owner of symlink target\n",
 			path)
@@ -188,7 +189,7 @@ func setFlagsWatchMode(watcher *inotify.Watcher, path string, flags string, nonr
 	watcher.RemoveWatch(path)
 	setFlags(path, flags, nonroot)
 	if err != nil {
-		return(err)
+		return (err)
 	}
 	addWatchToClosestPath(watcher, path)
 	return
@@ -303,7 +304,7 @@ func runWatcher(watcher *inotify.Watcher) {
 					msg := fmt.Sprintf("File created: %s\n", ev.Name)
 					LogWriter.Info(msg)
 				}
-			// Catch directory creation events for non-existent directories in executable path
+				// Catch directory creation events for non-existent directories in executable path
 			} else if ev.Mask == (inotify.IN_CREATE | inotify.IN_ISDIR) {
 				for path, _ := range (*Conf).Settings {
 					if strings.HasPrefix(path, ev.Name) {
