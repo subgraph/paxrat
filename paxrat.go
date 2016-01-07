@@ -1,10 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"log/syslog"
 	"os"
@@ -39,6 +39,8 @@ var Conf *Config
 var LogWriter *syslog.Writer
 var SyslogError error
 
+var commentRegexp = regexp.MustCompile("^[ \t]*#")
+
 func init() {
 	LogWriter, SyslogError = syslog.New(syslog.LOG_INFO, "paxrat")
 	if SyslogError != nil {
@@ -65,12 +67,21 @@ func init() {
 }
 
 func (conf *Config) readConfig(path string) (err error) {
-	file, err := ioutil.ReadFile(path)
+	file, err := os.Open(path)
 	if err != nil {
 		log.Fatal(err)
 	}
+	scanner := bufio.NewScanner(file)
+	out := ""
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !commentRegexp.MatchString(line) {
+			out += line + "\n"
+		}
+
+	}
 	var data = &conf.Settings
-	err = json.Unmarshal(file, data)
+	err = json.Unmarshal([]byte(out), data)
 	if err != nil {
 		log.Fatal(err)
 	}
