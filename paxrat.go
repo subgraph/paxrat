@@ -41,7 +41,9 @@ var SyslogError error
 func init() {
 	LogWriter, SyslogError = syslog.New(syslog.LOG_INFO, "paxrat")
 	if SyslogError != nil {
-		log.Fatal(SyslogError)
+		// TODO: We should continue running and log to STDOUT instead using same LogWriter interface
+		fmt.Println(SyslogError)
+		os.Exit(0) // Exit cleanly for dpkg
 	}
 	InotifyFlags = (inotify.IN_DONT_FOLLOW | inotify.IN_ATTRIB |
 		inotify.IN_CREATE | inotify.IN_DELETE_SELF | inotify.IN_MOVE_SELF |
