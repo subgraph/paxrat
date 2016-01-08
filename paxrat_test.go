@@ -1,3 +1,6 @@
+// AUthor: David McKinney <mckinney@subgraph>
+// Copyright (C) 2014-2015 Subgraph
+
 package main
 
 import (
