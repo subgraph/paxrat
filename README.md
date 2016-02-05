@@ -28,7 +28,8 @@ such as during system updates (similar to
 paxrat configuration is provided via a JSON file that lists each binary, the 
 PaX flags, and a `nonroot` setting to specify whether the target binary is 
 not root-owned (paxrat will not set PaX flags on non-root owned binaries unless
-this is set to `true`).
+this is set to `true`). By default paxrat will look for binary divertions using
+`dpkg-divert`, this can be disabled by using the `nodivert` setting.
 
 ## Configuration example
 

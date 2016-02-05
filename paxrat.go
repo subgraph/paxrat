@@ -27,10 +27,12 @@ var watchvar bool
 var flagsvar string
 var binaryvar string
 var nonrootvar bool
+var nodivertvar bool
 
 type Setting struct {
-	Flags   string `json:"flags"`
-	Nonroot bool   `json:"nonroot,omitempty"`
+	Flags    string `json:"flags"`
+	Nonroot  bool   `json:"nonroot,omitempty"`
+	Nodivert bool   `json:"nodivert,omitempty"`
 }
 type Config struct {
 	Settings map[string]Setting
@@ -66,7 +68,9 @@ func init() {
 	flag.StringVar(&flagsvar, "s", "",
 		"Set PaX flags for a single binary (must also specify binary)")
 	flag.BoolVar(&nonrootvar, "n", false,
-		"Set nonroot variable for a single binary (needed to set flags on a non-root owned binary")
+		"Set nonroot variable for a single binary (needed to set flags on a non-root owned binary)")
+	flag.BoolVar(&nodivertvar, "d", false,
+		"Disable checking for dpkg-divert original path (generally this should be enabled)")
 	flag.StringVar(&binaryvar, "b", "",
 		"Path to a binary for use with set option")
 }
@@ -98,6 +102,19 @@ func pathExists(path string) (result bool) {
 		result = true
 	}
 	return
+}
+
+func getPathDiverted(path string) (string, error) {
+	ddpath, err := exec.LookPath("dpkg-divert")
+	if err != nil {
+		log.Println("Warning dpkg-divert unavailable.")
+		return path, nil
+	}
+	outp, err := exec.Command(ddpath, "--truename", path).Output()
+	if err != nil {
+		return path, err
+	}
+	return strings.TrimSpace(string(outp)), nil
 }
 
 func validateFlags(flags string) (err error) {
@@ -134,7 +151,7 @@ func setWithPaxctl(path string, flags string) (err error) {
 	return
 }
 
-func setFlags(path string, flags string, nonroot bool) (err error) {
+func setFlags(path string, flags string, nonroot, nodivert bool) (err error) {
 	root, err := runningAsRoot()
 	if !root {
 		log.Fatal("paxrat must be run as root to set PaX flags.")
@@ -162,8 +179,15 @@ func setFlags(path string, flags string, nonroot bool) (err error) {
 			path)
 		return
 	}
+	dpath := path
+	if !nonroot && !nodivert {
+		dpath, err = getPathDiverted(path)
+		if err != nil {
+			return fmt.Errorf("Unable to get real path for %s", path)
+		}
+	}
 	// Resolve the symlink target
-	realpath, err := filepath.EvalSymlinks(path)
+	realpath, err := filepath.EvalSymlinks(dpath)
 	if err != nil {
 		return
 	}
@@ -201,19 +225,19 @@ func setFlags(path string, flags string, nonroot bool) (err error) {
 	return
 }
 
-func setFlagsWatchMode(watcher *inotify.Watcher, path string, flags string, nonroot bool) (err error) {
+func setFlagsWatchMode(watcher *inotify.Watcher, path string, flags string, nonroot, nodivert bool) error {
 	watcher.RemoveWatch(path)
-	setFlags(path, flags, nonroot)
+	err := setFlags(path, flags, nonroot, nodivert)
 	if err != nil {
-		return (err)
+		return err
 	}
 	addWatchToClosestPath(watcher, path)
-	return
+	return nil
 }
 
 func setFlagsFromConfig() {
 	for path, setting := range (*Conf).Settings {
-		err := setFlags(path, setting.Flags, setting.Nonroot)
+		err := setFlags(path, setting.Flags, setting.Nonroot, setting.Nodivert)
 		if err != nil {
 			log.Println(err)
 		}
@@ -223,8 +247,7 @@ func setFlagsFromConfig() {
 func listFlags(path string) (err error) {
 	exists := pathExists(path)
 	if !exists {
-		log.Printf("%s does not exist, cannot check PaX flags.\n",
-			path)
+		log.Printf("%s does not exist, cannot check PaX flags.\n", path)
 		return
 	}
 	supported, err := isXattrSupported()
@@ -299,7 +322,7 @@ func initWatcher() (watcher *inotify.Watcher, err error) {
 	}
 	for path, setting := range (*Conf).Settings {
 		addWatchToClosestPath(watcher, path)
-		err = setFlagsWatchMode(watcher, path, setting.Flags, setting.Nonroot)
+		err = setFlagsWatchMode(watcher, path, setting.Flags, setting.Nonroot, setting.Nodivert)
 		if err != nil {
 			msg := fmt.Sprintf("setFlags error in initWatcher: %s", err)
 			LogWriter.Err(msg)
@@ -352,7 +375,7 @@ func runWatcher(watcher *inotify.Watcher) {
 			}
 			if settings, ok := (*Conf).Settings[ev.Name]; ok {
 				if ev.Mask != inotify.IN_IGNORED {
-					err := setFlagsWatchMode(watcher, ev.Name, settings.Flags, settings.Nonroot)
+					err := setFlagsWatchMode(watcher, ev.Name, settings.Flags, settings.Nonroot, settings.Nodivert)
 					if err != nil {
 						msg := fmt.Sprintf("watch mode setFlags error: %s", err)
 						LogWriter.Err(msg)
@@ -378,7 +401,7 @@ func main() {
 		log.Printf("Configuration is valid\n")
 		os.Exit(0)
 	} else if binaryvar != "" && flagsvar != "" {
-		err := setFlags(binaryvar, flagsvar, nonrootvar)
+		err := setFlags(binaryvar, flagsvar, nonrootvar, nodivertvar)
 		if err != nil {
 			log.Println(err)
 		}
