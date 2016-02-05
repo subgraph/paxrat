@@ -105,12 +105,12 @@ func pathExists(path string) (result bool) {
 }
 
 func getPathDiverted(path string) (string, error) {
-	ddpath, err := exec.LookPath("dpkg-divert")
-	if err != nil {
-		log.Println("Warning dpkg-divert unavailable.")
+	exists := pathExists("/usr/bin/dpkg-divert")
+	if !exists {
+		log.Println("Warning: dpkg-divert appears to be unavailable!")
 		return path, nil
 	}
-	outp, err := exec.Command(ddpath, "--truename", path).Output()
+	outp, err := exec.Command("/usr/bin/dpkg-divert", "--truename", path).Output()
 	if err != nil {
 		return path, err
 	}
