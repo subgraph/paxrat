@@ -1,4 +1,4 @@
-// AUthor: David McKinney <mckinney@subgraph>
+// Author: David McKinney <mckinney@subgraph>
 // Copyright (C) 2014-2015 Subgraph
 
 package main
@@ -313,11 +313,11 @@ func addWatchToClosestPath(watcher *inotify.Watcher, path string) {
 
 }
 
-func initWatcher() (watcher *inotify.Watcher, err error) {
+func initWatcher() (*inotify.Watcher, error) {
 	LogWriter.Info("Initializing paxrat watcher")
-	watcher, err = inotify.NewWatcher()
+	watcher, err := inotify.NewWatcher()
 	if err != nil {
-		return
+		return watcher, err
 	}
 	for path, setting := range (*Conf).Settings {
 		addWatchToClosestPath(watcher, path)
@@ -327,7 +327,7 @@ func initWatcher() (watcher *inotify.Watcher, err error) {
 			LogWriter.Err(msg)
 		}
 	}
-	return
+	return watcher, nil
 }
 
 // TODO: Resolve some corner cases like watches not set after create, delete, create, move

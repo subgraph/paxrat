@@ -22,14 +22,14 @@ func createTestConfig(path string, contents string) (err error) {
 func TestRunWatcher1(t *testing.T) {
 	dir, err := ioutil.TempDir("", "inotify")
 	if err != nil {
-		t.Fatalf("TempDir failed: %s", err)
+		t.Fatalf("TempDir failed: %s\n", err)
 	}
 	defer os.RemoveAll(dir)
 	files := []string{dir + "/test1", dir + "/test2"}
 	for _, file := range files {
 		_, err = os.OpenFile(file, os.O_WRONLY|os.O_CREATE, 000)
 		if err != nil {
-			t.Fatalf("creating test file: %s", err)
+			t.Fatalf("creating test file: %s\n", err)
 		}
 	}
 	testJson := fmt.Sprintf(
@@ -43,15 +43,15 @@ func TestRunWatcher1(t *testing.T) {
 	Conf = new(Config)
 	err = createTestConfig(configPath, testJson)
 	if err != nil {
-		t.Fatalf("Could not create test config: %s", err)
+		t.Fatalf("Could not create test config: %s\n", err)
 	}
 	err = Conf.readConfig(configPath)
 	if err != nil {
-		t.Fatalf("Could not load config: %s", err)
+		t.Fatalf("Could not load config: %s\n", err)
 	}
 	watcher, err := initWatcher()
 	if err != nil {
-		t.Fatalf("Failed to init watcher: %s", err)
+		t.Fatalf("Failed to init watcher: %s\n", err)
 	}
 	done := make(chan bool)
 	go func(done chan bool) {
@@ -59,15 +59,15 @@ func TestRunWatcher1(t *testing.T) {
 	}(done)
 	err = os.Remove(files[0])
 	if err != nil {
-		t.Fatalf("Could not remove testFile1: %s", err)
+		t.Fatalf("Could not remove testFile1: %s\n", err)
 	}
 	err = os.Rename(files[1], dir+"moved")
 	if err != nil {
-		t.Fatalf("Could not move/rename TestFile2: %s", err)
+		t.Fatalf("Could not move/rename TestFile2: %s\n", err)
 	}
 	_, err = os.OpenFile(files[0], os.O_WRONLY|os.O_CREATE, 0666)
 	if err != nil {
-		t.Fatalf("creating test file: %s", err)
+		t.Fatalf("creating test file: %s\n", err)
 	}
 	time.Sleep(1 * time.Second)
 }
@@ -75,7 +75,7 @@ func TestRunWatcher1(t *testing.T) {
 func TestRunWatcher2(t *testing.T) {
 	dir, err := ioutil.TempDir("", "inotify")
 	if err != nil {
-		t.Fatalf("TempDir failed: %s", err)
+		t.Fatalf("TempDir failed: %s\n", err)
 	}
 	defer os.RemoveAll(dir)
 	testJson := fmt.Sprintf(
@@ -86,16 +86,16 @@ func TestRunWatcher2(t *testing.T) {
 	Conf = new(Config)
 	err = createTestConfig(configPath, testJson)
 	if err != nil {
-		t.Fatalf("Could not create test config: %s", err)
+		t.Fatalf("Could not create test config: %s\n", err)
 	}
 	err = Conf.readConfig(configPath)
 	if err != nil {
-		t.Fatalf("Could not load config: %s", err)
+		t.Fatalf("Could not load config: %s\n", err)
 	}
 	watcher, err := initWatcher()
 	if err != nil {
 		fmt.Println(dir)
-		t.Fatalf("Failed to init watcher: %s", err)
+		t.Fatalf("Failed to init watcher: %s\n", err)
 	}
 	done := make(chan bool)
 	go func(done chan bool) {
@@ -105,9 +105,9 @@ func TestRunWatcher2(t *testing.T) {
 	os.MkdirAll(dir+"/1/2/3/4/5/6/7/8/9/10", 0600)
 	time.Sleep(1 * time.Second)
 	file := dir + "/1/2/3/4/5/6/7/8/9/10/test1"
-	fmt.Printf("Creating test file: %s", file)
+	fmt.Printf("Creating test file: %s\n", file)
 	os.OpenFile(file, os.O_WRONLY|os.O_CREATE, 000)
 	if err != nil {
-		t.Fatalf("creating test file: %s", err)
+		t.Fatalf("creating test file: %s\n", err)
 	}
 }
