@@ -164,6 +164,12 @@ func setFlags(path string, flags string, nonroot, nodivert bool) (err error) {
 	if err != nil {
 		return
 	}
+	if !nonroot && !nodivert {
+		path, err = getPathDiverted(path)
+		if err != nil {
+			return fmt.Errorf("Unable to get real path for %s", path)
+		}
+	}
 	fiPath, err := os.Lstat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -179,15 +185,8 @@ func setFlags(path string, flags string, nonroot, nodivert bool) (err error) {
 			path)
 		return
 	}
-	dpath := path
-	if !nonroot && !nodivert {
-		dpath, err = getPathDiverted(path)
-		if err != nil {
-			return fmt.Errorf("Unable to get real path for %s", path)
-		}
-	}
 	// Resolve the symlink target
-	realpath, err := filepath.EvalSymlinks(dpath)
+	realpath, err := filepath.EvalSymlinks(path)
 	if err != nil {
 		return
 	}
