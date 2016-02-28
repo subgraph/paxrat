@@ -137,7 +137,7 @@ func setWithPaxctl(path string, flags string) (err error) {
 		msg := fmt.Sprintf(
 			"/sbin/paxctl does not exist, cannot set '%s' PaX flags on %s.\n",
 			flags, path)
-		LogWriter.Info(msg)
+		LogWriter.Debug(msg)
 		return
 	}
 	flagsFmt := fmt.Sprintf("-%s", flags)
@@ -173,7 +173,9 @@ func setFlags(path string, flags string, nonroot, nodivert bool) (err error) {
 	fiPath, err := os.Lstat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			err = fmt.Errorf("%s does not exist, cannot set flags", path)
+			msg := fmt.Sprintf("%s does not exist, cannot set flags", path)
+			LogWriter.Debug(msg)
+			err = nil
 		}
 		return
 	}
@@ -193,7 +195,9 @@ func setFlags(path string, flags string, nonroot, nodivert bool) (err error) {
 	fiRPath, err := os.Lstat(realpath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			err = fmt.Errorf("%s does not exist, cannot set flags", path)
+			msg := fmt.Sprintf("%s does not exist, cannot set flags", path)
+			LogWriter.Info(msg)
+			err = nil
 		}
 		return
 	}
