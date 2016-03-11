@@ -23,6 +23,7 @@ import (
 
 var configvar string
 var testvar bool
+var xattrvar bool
 var watchvar bool
 var flagsvar string
 var binaryvar string
@@ -63,6 +64,8 @@ func init() {
 		"Pax flags configuration file")
 	flag.BoolVar(&testvar, "t", false,
 		"Test the config file and then exit")
+	flag.BoolVar(&xattrvar, "x", false,
+	        "Force use of xattr to set PaX flags")
 	flag.BoolVar(&watchvar, "w", false,
 		"Run paxrat in watch mode")
 	flag.StringVar(&flagsvar, "s", "",
@@ -75,7 +78,7 @@ func init() {
 		"Path to a binary for use with set option")
 }
 
-func (conf *Config) readConfig(path string) (err error) {
+func (conf *Config) readConfig(path string) (error) {
 	file, err := os.Open(path)
 	if err != nil {
 		log.Fatal(err)
@@ -94,14 +97,15 @@ func (conf *Config) readConfig(path string) (err error) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	return
+	return err
 }
 
-func pathExists(path string) (result bool) {
+func pathExists(path string) (bool) {
+	result := false
 	if _, err := os.Stat(path); err == nil {
 		result = true
 	}
-	return
+	return result
 }
 
 func getPathDiverted(path string) (string, error) {
@@ -117,52 +121,53 @@ func getPathDiverted(path string) (string, error) {
 	return strings.TrimSpace(string(outp)), nil
 }
 
-func validateFlags(flags string) (err error) {
+func validateFlags(flags string) (error) {
+	var err error
 	match, _ := regexp.MatchString("(?i)[^pemrxs]", flags)
 	if match {
 		err = fmt.Errorf("Bad characters found in PaX flags: %s",
 			flags)
 	}
-	return
+	return err
 }
 
-func setWithXattr(path string, flags string) (err error) {
-	err = syscall.Setxattr(path, "user.pax.flags", []byte(flags), 0)
-	return
+func setWithXattr(path string, flags string) (error) {
+	err := syscall.Setxattr(path, "user.pax.flags", []byte(flags), 0)
+	return err
 }
 
-func setWithPaxctl(path string, flags string) (err error) {
+func setWithPaxctl(path string, flags string) (error) {
 	exists := pathExists("/sbin/paxctl")
 	if !exists {
 		msg := fmt.Sprintf(
 			"/sbin/paxctl does not exist, cannot set '%s' PaX flags on %s.\n",
 			flags, path)
 		LogWriter.Debug(msg)
-		return
+		return nil
 	}
 	flagsFmt := fmt.Sprintf("-%s", flags)
 	args := []string{"-c", flagsFmt, path}
 	log.Println(args)
 	// TODO: Deal with errors from paxctl
-	if err = exec.Command("/sbin/paxctl", args...).Run(); err != nil {
+	if err := exec.Command("/sbin/paxctl", args...).Run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		return
+		return err
 	}
-	return
+	return nil
 }
 
-func setFlags(path string, flags string, nonroot, nodivert bool) (err error) {
+func setFlags(path string, flags string, nonroot, nodivert bool) (error) {
 	root, err := runningAsRoot()
 	if !root {
 		log.Fatal("paxrat must be run as root to set PaX flags.")
 	}
 	err = validateFlags(flags)
 	if err != nil {
-		return
+		return err
 	}
 	supported, err := isXattrSupported()
 	if err != nil {
-		return
+		return err
 	}
 	if !nonroot && !nodivert {
 		path, err = getPathDiverted(path)
@@ -177,7 +182,7 @@ func setFlags(path string, flags string, nonroot, nodivert bool) (err error) {
 			LogWriter.Debug(msg)
 			err = nil
 		}
-		return
+		return err
 	}
 	linkUid := fiPath.Sys().(*syscall.Stat_t).Uid
 	// Throw error if nonroot option is not set but the file is owned by a user other than root
@@ -185,12 +190,12 @@ func setFlags(path string, flags string, nonroot, nodivert bool) (err error) {
 		err = fmt.Errorf(
 			"Cannot set PaX flags on %s. Owner of symlink did not match owner of symlink target\n",
 			path)
-		return
+		return err
 	}
 	// Resolve the symlink target
 	realpath, err := filepath.EvalSymlinks(path)
 	if err != nil {
-		return
+		return err
 	}
 	fiRPath, err := os.Lstat(realpath)
 	if err != nil {
@@ -199,7 +204,7 @@ func setFlags(path string, flags string, nonroot, nodivert bool) (err error) {
 			LogWriter.Info(msg)
 			err = nil
 		}
-		return
+		return err
 	}
 	targetUid := fiRPath.Sys().(*syscall.Stat_t).Uid
 	// If nonroot is set then throw an error if the owner of the file is different than the owner of the symlink target
@@ -207,14 +212,14 @@ func setFlags(path string, flags string, nonroot, nodivert bool) (err error) {
 		err = fmt.Errorf(
 			"Cannot set PaX flags on %s. Owner of symlink did not match owner of symlink target\n",
 			path)
-		return
+		return err
 	}
 	if supported {
 		msg := fmt.Sprintf("Setting '%s' PaX flags via xattr on %s\n", flags, path)
 		LogWriter.Info(msg)
 		err = setWithXattr(path, flags)
 		if err != nil {
-			return
+			return err
 		}
 	} else {
 		msg := fmt.Sprintf("Setting '%s' PaX flags via paxctl on %s\n", flags, path)
@@ -222,13 +227,13 @@ func setFlags(path string, flags string, nonroot, nodivert bool) (err error) {
 		err = setWithPaxctl(path, flags)
 		if err != nil {
 			listFlags(path)
-			return
+			return err
 		}
 	}
-	return
+	return err
 }
 
-func setFlagsWatchMode(watcher *inotify.Watcher, path string, flags string, nonroot, nodivert bool) error {
+func setFlagsWatchMode(watcher *inotify.Watcher, path string, flags string, nonroot, nodivert bool) (error) {
 	watcher.RemoveWatch(path)
 	err := setFlags(path, flags, nonroot, nodivert)
 	if err != nil {
@@ -247,15 +252,15 @@ func setFlagsFromConfig() {
 	}
 }
 
-func listFlags(path string) (err error) {
+func listFlags(path string) (error) {
 	exists := pathExists(path)
 	if !exists {
 		log.Printf("%s does not exist, cannot check PaX flags.\n", path)
-		return
+		return nil
 	}
 	supported, err := isXattrSupported()
 	if err != nil {
-		return
+		return err
 	}
 	if supported {
 		var flags []byte
@@ -276,11 +281,16 @@ func listFlags(path string) (err error) {
 		}
 		log.Printf("%s\n", out)
 	}
-	return
+	return err
 }
 
-func isXattrSupported() (result bool, err error) {
-	result = true
+func isXattrSupported() (bool, error) {
+	var err error
+	if xattrvar {
+		LogWriter.Debug("Running forced xattr mode")
+		return true, err
+	}
+	result := true
 	setXattrErr := syscall.Setxattr("/proc/self/exe", "user.test xattr", []byte("test xattr data"), 0)
 	if setXattrErr != nil {
 		errno := setXattrErr.(syscall.Errno)
@@ -291,19 +301,20 @@ func isXattrSupported() (result bool, err error) {
 			err = setXattrErr
 		}
 	}
-	return
+	return result, err
 }
 
-func runningAsRoot() (result bool, err error) {
+func runningAsRoot() (bool, error) {
 	current, err := user.Current()
+	result := false
 	if err != nil {
 		log.Println(err)
-		return
+		return result, err
 	}
 	if current.Uid == "0" && current.Gid == "0" && current.Username == "root" {
 		result = true
 	}
-	return
+	return result, err
 }
 
 func addWatchToClosestPath(watcher *inotify.Watcher, path string) {
