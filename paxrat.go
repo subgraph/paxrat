@@ -29,6 +29,7 @@ var flagsvar string
 var binaryvar string
 var nonrootvar bool
 var nodivertvar bool
+var replacementvar string
 
 type Setting struct {
 	Flags    string `json:"flags"`
@@ -46,6 +47,8 @@ var LogWriter *syslog.Writer
 var SyslogError error
 
 var commentRegexp = regexp.MustCompile("^[ \t]*#")
+var replacementRegexp = regexp.MustCompile("\\$REPLACEMENT")
+var pathlineRegexp = regexp.MustCompile("\\\": {$")
 
 func init() {
 	LogWriter, SyslogError = syslog.New(syslog.LOG_INFO, "paxrat")
@@ -65,7 +68,7 @@ func init() {
 	flag.BoolVar(&testvar, "t", false,
 		"Test the config file and then exit")
 	flag.BoolVar(&xattrvar, "x", false,
-	        "Force use of xattr to set PaX flags")
+		"Force use of xattr to set PaX flags")
 	flag.BoolVar(&watchvar, "w", false,
 		"Run paxrat in watch mode")
 	flag.StringVar(&flagsvar, "s", "",
@@ -76,9 +79,11 @@ func init() {
 		"Disable checking for dpkg-divert original path (generally this should be enabled)")
 	flag.StringVar(&binaryvar, "b", "",
 		"Path to a binary for use with set option")
+	flag.StringVar(&replacementvar, "r", "",
+		"Replacement string to use in binary path JSON (ex: $REPLACEMENT in binary path)")
 }
 
-func (conf *Config) readConfig(path string) (error) {
+func (conf *Config) readConfig(path string) error {
 	file, err := os.Open(path)
 	if err != nil {
 		log.Fatal(err)
@@ -90,7 +95,10 @@ func (conf *Config) readConfig(path string) (error) {
 		if !commentRegexp.MatchString(line) {
 			out += line + "\n"
 		}
-
+		if replacementvar != "" && pathlineRegexp.MatchString(line) {
+			line = replacementRegexp.ReplaceAllLiteralString(line, replacementvar)
+			fmt.Println(line)
+		}
 	}
 	var data = &conf.Settings
 	err = json.Unmarshal([]byte(out), data)
@@ -100,7 +108,7 @@ func (conf *Config) readConfig(path string) (error) {
 	return err
 }
 
-func pathExists(path string) (bool) {
+func pathExists(path string) bool {
 	result := false
 	if _, err := os.Stat(path); err == nil {
 		result = true
@@ -121,7 +129,7 @@ func getPathDiverted(path string) (string, error) {
 	return strings.TrimSpace(string(outp)), nil
 }
 
-func validateFlags(flags string) (error) {
+func validateFlags(flags string) error {
 	var err error
 	match, _ := regexp.MatchString("(?i)[^pemrxs]", flags)
 	if match {
@@ -131,12 +139,12 @@ func validateFlags(flags string) (error) {
 	return err
 }
 
-func setWithXattr(path string, flags string) (error) {
+func setWithXattr(path string, flags string) error {
 	err := syscall.Setxattr(path, "user.pax.flags", []byte(flags), 0)
 	return err
 }
 
-func setWithPaxctl(path string, flags string) (error) {
+func setWithPaxctl(path string, flags string) error {
 	exists := pathExists("/sbin/paxctl")
 	if !exists {
 		msg := fmt.Sprintf(
@@ -156,7 +164,7 @@ func setWithPaxctl(path string, flags string) (error) {
 	return nil
 }
 
-func setFlags(path string, flags string, nonroot, nodivert bool) (error) {
+func setFlags(path string, flags string, nonroot, nodivert bool) error {
 	root, err := runningAsRoot()
 	if !root {
 		log.Fatal("paxrat must be run as root to set PaX flags.")
@@ -172,6 +180,7 @@ func setFlags(path string, flags string, nonroot, nodivert bool) (error) {
 	if !nonroot && !nodivert {
 		path, err = getPathDiverted(path)
 		if err != nil {
+			fmt.Println(err)
 			return fmt.Errorf("Unable to get real path for %s", path)
 		}
 	}
@@ -233,7 +242,7 @@ func setFlags(path string, flags string, nonroot, nodivert bool) (error) {
 	return err
 }
 
-func setFlagsWatchMode(watcher *inotify.Watcher, path string, flags string, nonroot, nodivert bool) (error) {
+func setFlagsWatchMode(watcher *inotify.Watcher, path string, flags string, nonroot, nodivert bool) error {
 	watcher.RemoveWatch(path)
 	err := setFlags(path, flags, nonroot, nodivert)
 	if err != nil {
@@ -252,7 +261,7 @@ func setFlagsFromConfig() {
 	}
 }
 
-func listFlags(path string) (error) {
+func listFlags(path string) error {
 	exists := pathExists(path)
 	if !exists {
 		log.Printf("%s does not exist, cannot check PaX flags.\n", path)
