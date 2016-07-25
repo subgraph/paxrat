@@ -139,7 +139,19 @@ func validateFlags(flags string) error {
 	return err
 }
 
+func checkEmulTramp(flags string) string {
+	if strings.Contains(flags, "E") {
+		flags = strings.Replace(flags, "e", "", -1)
+	} else {
+		if !strings.Contains(flags, "e") {
+			flags = flags + "e"
+		}
+	}
+	return flags
+}
+
 func setWithXattr(path string, flags string) error {
+	flags = checkEmulTramp(flags)
 	err := syscall.Setxattr(path, "user.pax.flags", []byte(flags), 0)
 	return err
 }
