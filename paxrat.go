@@ -1,5 +1,5 @@
 // Author: David McKinney <mckinney@subgraph>
-// Copyright (C) 2014-2015 Subgraph
+// Copyright (C) 2014-2017 Subgraph
 
 package main
 
@@ -18,7 +18,7 @@ import (
 	"strings"
 	"syscall"
 
-	"golang.org/x/exp/inotify"
+	"github.com/subgraph/inotify"
 )
 
 var configvar string
