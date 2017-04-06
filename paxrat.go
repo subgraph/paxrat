@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"log/syslog"
@@ -21,6 +22,8 @@ import (
 
 	"github.com/subgraph/inotify"
 )
+
+const ioctlReadTermios = 0x5401
 
 var configvar string
 var testvar bool
@@ -58,7 +61,7 @@ func init() {
 	if SyslogError != nil {
 		log.SetOutput(os.Stdout)
 	} else {
-		log.SetOutput(LogWriter)
+		log.SetOutput(io.MultiWriter(os.Stdout, LogWriter))
 	}
 	InotifyFlags = (inotify.IN_DONT_FOLLOW | inotify.IN_ATTRIB |
 		inotify.IN_CREATE | inotify.IN_DELETE_SELF | inotify.IN_MOVE_SELF |
@@ -87,7 +90,8 @@ func init() {
 	flag.BoolVar(&quietvar, "q", false,
 		"Turn off all output/logging")
 	flag.BoolVar(&verbosevar, "v", false,
-		"Verbose logging to stdout")
+		"Verbose output mode")
+
 }
 
 func (conf *Config) readConfig(path string) error {
@@ -166,10 +170,10 @@ func setWithXattr(path string, flags string) error {
 func setWithPaxctl(path string, flags string) error {
 	exists := pathExists("/sbin/paxctl")
 	if !exists {
-		msg := fmt.Sprintf(
+		log.Printf(
 			"/sbin/paxctl does not exist, cannot set '%s' PaX flags on %s.\n",
 			flags, path)
-		log.Println(msg)
+
 		return nil
 	}
 	flagsFmt := fmt.Sprintf("-%s", flags)
@@ -199,15 +203,16 @@ func setFlags(path string, flags string, nonroot, nodivert bool) error {
 	if !nonroot && !nodivert {
 		path, err = getPathDiverted(path)
 		if err != nil {
-			fmt.Println(err)
-			return fmt.Errorf("Unable to get real path for %s", path)
+			log.Println(err)
+			return fmt.Errorf("Unable to get real path for %s\n", path)
 		}
 	}
 	fiPath, err := os.Lstat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			msg := fmt.Sprintf("%s does not exist, cannot set flags", path)
-			log.Println(msg)
+			if verbosevar {
+				log.Printf("%s does not exist, cannot set flags\n", path)
+			}
 			err = nil
 		}
 		return err
@@ -228,8 +233,9 @@ func setFlags(path string, flags string, nonroot, nodivert bool) error {
 	fiRPath, err := os.Lstat(realpath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			msg := fmt.Sprintf("%s does not exist, cannot set flags", path)
-			log.Println(msg)
+			if verbosevar {
+				log.Printf("%s does not exist, cannot set flags\n", path)
+			}
 			err = nil
 		}
 		return err
@@ -243,15 +249,13 @@ func setFlags(path string, flags string, nonroot, nodivert bool) error {
 		return err
 	}
 	if supported {
-		msg := fmt.Sprintf("Setting '%s' PaX flags via xattr on %s\n", flags, path)
-		log.Println(msg)
+		log.Printf("Setting '%s' PaX flags via xattr on %s\n", flags, path)
 		err = setWithXattr(path, flags)
 		if err != nil {
 			return err
 		}
 	} else {
-		msg := fmt.Sprintf("Setting '%s' PaX flags via paxctl on %s\n", flags, path)
-		log.Println(msg)
+		log.Printf("Setting '%s' PaX flags via paxctl on %s\n", flags, path)
 		err = setWithPaxctl(path, flags)
 		if err != nil {
 			listFlags(path)
@@ -315,7 +319,6 @@ func listFlags(path string) error {
 func isXattrSupported() (bool, error) {
 	var err error
 	if xattrvar {
-		log.Println("Running forced xattr mode")
 		return true, err
 	}
 	result := true
@@ -366,8 +369,7 @@ func initWatcher() (*inotify.Watcher, error) {
 		addWatchToClosestPath(watcher, path)
 		err = setFlagsWatchMode(watcher, path, setting.Flags, setting.Nonroot, setting.Nodivert)
 		if err != nil {
-			msg := fmt.Sprintf("setFlags error in initWatcher: %s", err)
-			log.Println(msg)
+			log.Printf("setFlags error in initWatcher: %s\n", err)
 		}
 	}
 	return watcher, nil
@@ -382,8 +384,7 @@ func runWatcher(watcher *inotify.Watcher) {
 			if ev.Mask == inotify.IN_CREATE {
 				if _, ok := (*Conf).Settings[ev.Name]; ok {
 					watcher.AddWatch(ev.Name, InotifyFlags)
-					msg := fmt.Sprintf("File created: %s\n", ev.Name)
-					log.Println(msg)
+					log.Printf("File created: %s\n", ev.Name)
 				}
 				// Catch directory creation events for non-existent directories in executable path
 			} else if ev.Mask == (inotify.IN_CREATE | inotify.IN_ISDIR) {
@@ -394,8 +395,7 @@ func runWatcher(watcher *inotify.Watcher) {
 				}
 			} else if ev.Mask == inotify.IN_DELETE_SELF || ev.Mask == inotify.IN_MOVE_SELF {
 				if _, ok := (*Conf).Settings[ev.Name]; ok {
-					msg := fmt.Sprintf("File deleted: %s\n", ev.Name)
-					log.Println(msg)
+					log.Printf("File deleted: %s\n", ev.Name)
 					parent := filepath.Dir(ev.Name)
 					watcher.AddWatch(parent, InotifyDirFlags)
 					continue
@@ -404,14 +404,13 @@ func runWatcher(watcher *inotify.Watcher) {
 				if _, ok := (*Conf).Settings[ev.Name]; ok {
 					exists := pathExists(ev.Name)
 					if !exists {
-						msg := fmt.Sprintf("File deleted: %s\n", ev.Name)
-						log.Println(msg)
+						log.Printf("File deleted: %s\n", ev.Name)
 						parent := filepath.Dir(ev.Name)
 						watcher.AddWatch(parent, InotifyDirFlags)
 						continue
 					} else {
-						msg := fmt.Sprintf("File attributes changed: %s", ev.Name)
-						log.Println(msg)
+						log.Printf("File attributes changed: %s\n", ev.Name)
+
 					}
 				}
 			}
@@ -419,14 +418,12 @@ func runWatcher(watcher *inotify.Watcher) {
 				if ev.Mask != inotify.IN_IGNORED {
 					err := setFlagsWatchMode(watcher, ev.Name, settings.Flags, settings.Nonroot, settings.Nodivert)
 					if err != nil {
-						msg := fmt.Sprintf("watch mode setFlags error: %s", err)
-						log.Println(msg)
+						log.Printf("watch mode setFlags error: %s\n", err)
 					}
 				}
 			}
 		case err := <-watcher.Error:
-			msg := fmt.Sprintf("watch mode watcher error: %s", err)
-			log.Println(msg)
+			log.Printf("watch mode watcher error: %s\n", err)
 		}
 	}
 	return
@@ -436,9 +433,6 @@ func main() {
 	flag.Parse()
 	if quietvar && !verbosevar {
 		log.SetOutput(ioutil.Discard)
-	}
-	if verbosevar {
-		log.SetOutput(os.Stdout)
 	}
 	if testvar {
 		log.Printf("Reading config from: %s\n", configvar)
@@ -455,6 +449,9 @@ func main() {
 		}
 		os.Exit(0)
 	} else {
+		if xattrvar {
+			log.Println("Running forced xattr mode")
+		}
 		log.Printf("Reading config from: %s\n", configvar)
 		err := Conf.readConfig(configvar)
 		if err != nil {
@@ -463,7 +460,7 @@ func main() {
 		if watchvar {
 			watcher, err := initWatcher()
 			if err != nil {
-				log.Fatalf("Could not initialize watcher: %s", err)
+				log.Fatalf("Could not initialize watcher: %s\n", err)
 			}
 			runWatcher(watcher)
 		} else {
