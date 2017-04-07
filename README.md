@@ -31,6 +31,14 @@ not root-owned (paxrat will not set PaX flags on non-root owned binaries unless
 this is set to `true`). By default paxrat will look for binary divertions using
 `dpkg-divert`, this can be disabled by using the `nodivert` setting.
 
+The default configuration file for paxrat is located in 
+`/etc/paxrat/paxrat.conf`. Running paxrat with no configuration file argument 
+will automatically use this file to set PaX flags.
+
+paxrat also supports optional configuration files from the 
+`/etc/paxrat/conf.d/` directory files. This is for user created configuration. 
+paxrat must be run with no `-c` argument to use the files in this directory.
+
 ## Configuration example
 
 The following is an example configuration:
@@ -51,13 +59,26 @@ The following is an example configuration:
 
 # Usage
 
+## Default mode
+
+When paxrat is run without a configuration file (without `-c`) argument, it will use 
+the configuration file found in `/etc/paxrat/paxrat.conf` to set PaX flags. 
+It will also scan `/etc/paxrat/conf.d/` for additional configuration files. The 
+`/etc/paxrat/conf.d/` directory can be used for user configurations. This is 
+the *preferred* mode of operation.
+
+
+```sh
+$ sudo paxrat
+```
+
 ## Set flags on a single binary
 
 ```sh
 $ sudo paxrat -s pm -b /usr/lib/iceweasel/iceweasel 
 ```
 
-## Set all flags from a config file
+## Set all flags from a non-default config file
 
 ```sh
 $ sudo paxrat -c paxrat.conf 

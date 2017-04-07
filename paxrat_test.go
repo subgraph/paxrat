@@ -11,12 +11,12 @@ import (
 	"time"
 )
 
-func createTestConfig(path string, contents string) (err error) {
+func createTestConfig(path string, contents string) error {
 	err = ioutil.WriteFile(path, []byte(contents), 0600)
 	if err != nil {
-		return
+		return err
 	}
-	return
+	return nil
 }
 
 func TestRunWatcher1(t *testing.T) {
@@ -32,7 +32,7 @@ func TestRunWatcher1(t *testing.T) {
 			t.Fatalf("creating test file: %s\n", err)
 		}
 	}
-	testJson := fmt.Sprintf(
+	testJSON := fmt.Sprintf(
 		`{"%s/test1": {`+
 			`"flags": "mr",`+
 			`"nonroot": false},`+
@@ -40,22 +40,22 @@ func TestRunWatcher1(t *testing.T) {
 			`"flags": "E",`+
 			`"nonroot": false}}`, dir, dir)
 	configPath := dir + "paxrat_conf.json"
-	Conf = new(Config)
-	err = createTestConfig(configPath, testJson)
+	//Conf = new(Config)
+	err = createTestConfig(configPath, testJSON)
 	if err != nil {
 		t.Fatalf("Could not create test config: %s\n", err)
 	}
-	err = Conf.readConfig(configPath)
+	conf, err := readConfig(configPath)
 	if err != nil {
 		t.Fatalf("Could not load config: %s\n", err)
 	}
-	watcher, err := initWatcher()
+	watcher, err := initWatcher(conf)
 	if err != nil {
 		t.Fatalf("Failed to init watcher: %s\n", err)
 	}
 	done := make(chan bool)
 	go func(done chan bool) {
-		runWatcher(watcher)
+		runWatcher(watcher, conf)
 	}(done)
 	err = os.Remove(files[0])
 	if err != nil {
@@ -78,28 +78,27 @@ func TestRunWatcher2(t *testing.T) {
 		t.Fatalf("TempDir failed: %s\n", err)
 	}
 	defer os.RemoveAll(dir)
-	testJson := fmt.Sprintf(
+	testJSON := fmt.Sprintf(
 		`{"%s/1/2/3/4/5/6/7/8/9/10/test1": {`+
 			`"flags": "mr",`+
 			`"nonroot": false}}`, dir)
 	configPath := dir + "paxrat_conf.json"
-	Conf = new(Config)
-	err = createTestConfig(configPath, testJson)
+	err = createTestConfig(configPath, testJSON)
 	if err != nil {
 		t.Fatalf("Could not create test config: %s\n", err)
 	}
-	err = Conf.readConfig(configPath)
+	conf, err := readConfig(configPath)
 	if err != nil {
 		t.Fatalf("Could not load config: %s\n", err)
 	}
-	watcher, err := initWatcher()
+	watcher, err := initWatcher(conf)
 	if err != nil {
 		fmt.Println(dir)
 		t.Fatalf("Failed to init watcher: %s\n", err)
 	}
 	done := make(chan bool)
 	go func(done chan bool) {
-		runWatcher(watcher)
+		runWatcher(watcher, conf)
 	}(done)
 	time.Sleep(1 * time.Second)
 	os.MkdirAll(dir+"/1/2/3/4/5/6/7/8/9/10", 0600)
