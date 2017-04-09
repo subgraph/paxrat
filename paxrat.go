@@ -404,7 +404,9 @@ func runWatcher(watcher *inotify.Watcher, config *Config) {
 			if ev.Mask == inotify.IN_CREATE {
 				if _, ok := (*config).Settings[ev.Name]; ok {
 					watcher.AddWatch(ev.Name, InotifyFlags)
-					log.Printf("File created: %s\n", ev.Name)
+					if verbosevar {
+						log.Printf("File created: %s\n", ev.Name)
+					}
 				}
 				// Catch directory creation events for non-existent directories in executable path
 			} else if ev.Mask == (inotify.IN_CREATE | inotify.IN_ISDIR) {
@@ -415,7 +417,9 @@ func runWatcher(watcher *inotify.Watcher, config *Config) {
 				}
 			} else if ev.Mask == inotify.IN_DELETE_SELF || ev.Mask == inotify.IN_MOVE_SELF {
 				if _, ok := (*config).Settings[ev.Name]; ok {
-					log.Printf("File deleted: %s\n", ev.Name)
+					if verbosevar {
+						log.Printf("File deleted: %s\n", ev.Name)
+					}
 					parent := filepath.Dir(ev.Name)
 					watcher.AddWatch(parent, InotifyDirFlags)
 					continue
@@ -424,13 +428,16 @@ func runWatcher(watcher *inotify.Watcher, config *Config) {
 				if _, ok := (*config).Settings[ev.Name]; ok {
 					exists := pathExists(ev.Name)
 					if !exists {
-						log.Printf("File deleted: %s\n", ev.Name)
+						if verbosevar {
+							log.Printf("File deleted: %s\n", ev.Name)
+						}
 						parent := filepath.Dir(ev.Name)
 						watcher.AddWatch(parent, InotifyDirFlags)
 						continue
 					} else {
-						log.Printf("File attributes changed: %s\n", ev.Name)
-
+						if verbosevar {
+							log.Printf("File attributes changed: %s\n", ev.Name)
+						}
 					}
 				}
 			}
