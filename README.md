@@ -2,11 +2,11 @@
 
 paxrat is a utility to set PaX flags on a set of binaries. 
 
-Subgraph OS uses paxrat to maintain the PaX flags while running in installed and 
-live mode. It should also work out of the box on other Debian-based operating
-systems. Other Linux variants have not tested but in theory it should also work
-provided the paths in the config file are correct (as well as the hard-coded
-path to the `paxctl` binary).
+Subgraph OS uses paxrat to maintain the PaX flags while running in installed 
+and live mode. It should also work out of the box on other Debian-based 
+operating systems. Other Linux variants have not been tested but in theory it 
+should also work provided the paths in the config file are correct (as well as 
+the hard-coded path to the `paxctl` binary).
 
 ## Use cases
 
