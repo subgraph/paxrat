@@ -1,0 +1,22 @@
+Source: paxrat
+Section: admin
+Priority: optional
+Maintainer: Santiago Ruano Rincón <santiagorr@riseup.net>
+Build-Depends: debhelper (>= 9),
+               dh-golang,
+               golang-go,
+               golang-golang-x-exp-dev,
+               go-md2man
+Standards-Version: 3.9.8
+Homepage: https://subgraph.com/sgos/index.en.html
+
+Package: paxrat
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Recommends: paxctl
+Description: PaX flags management tool.
+ PaX implements least privilege protections for memory pages in the
+ Linux kernel and prevent different security-related exploits.
+ .
+ paxrat helps to keep and control PaX flags on binaries installed
+ on the system.

@@ -1,0 +1,82 @@
+paxrat (1.30) unstable; urgency=medium
+
+  * Synced with upstream 
+
+ -- David McKinney <mckinney@subgraph.com>  Sun, 09 Apr 2017 14:26:10 +0000
+
+paxrat (1.28) unstable; urgency=medium
+ 
+  * Synced paxrat.conf with upstream
+ 
+ -- David McKinney <mckinney@subgraph.com>  Sun, 26 Mar 2017 23:07:24 +0000
+
+paxrat (1.27) unstable; urgency=medium
+
+  * Synced paxrat.conf with upstream
+
+ -- David McKinney <mckinney@subgraph.com>  Mon, 20 Feb 2017 18:00:31 -0500
+
+paxrat (1.26) unstable; urgency=medium
+
+  * Synced paxrat.conf with upstream 
+
+ -- David McKinney <mckinney@subgraph.com>  Tue, 27 Dec 2016 18:56:04 -0500
+
+paxrat (1.25) unstable; urgency=medium
+
+  * Synced paxrat.conf with upstream 
+
+ -- David McKinney <mckinney@subgraph.com>  Fri, 23 Dec 2016 18:11:30 -0500
+
+paxrat (1.24) unstable; urgency=medium
+
+  * Synced paxrat.conf with upstream
+
+ -- David McKinney <mckinney@subgraph.com>  Tue, 29 Nov 2016 20:14:46 -0500
+
+paxrat (1.23) unstable; urgency=medium
+
+  * Synced paxrat.conf with upstream 
+
+ -- David McKinney <mckinney@subgraph.com>  Sat, 22 Oct 2016 15:59:00 -0400
+
+paxrat (1.22) unstable; urgency=medium
+
+  * Implemented quiet and verbose mode
+  * Improved handling of output when syslog not available 
+
+ -- David McKinney <mckinney@subgraph.com>  Thu, 08 Sep 2016 16:42:11 -0400
+
+paxrat (1.21) unstable; urgency=medium
+
+  [ David McKinney ]
+  * Modified gnome-session utility related PaX flags in paxrat.conf. 
+  * Removed some unused binary paths, fixed some others 
+  * Enabled Dpkg hook for paxrat 
+  * Silently error out when syslog not enabled
+  * Changed PaX flags for iceweasel and TBB 
+  * Added PaX flag for gst-plugin-scanner 
+  * Added PaX flag for seahorse 
+  * Added PaX flag for icedove 
+  * Updated missing/old info in control
+  * Added PaX flag for liferea and gstreamer-1.0/gst-plugin-scanner
+  * Added PaX flag for vlc 
+  * Added PaX flag for gjs-console
+  * Added dpkg-divert checking feature from upstream 
+  * Added PaX flag for gnome-shell-extension-prefs 
+  * Added PaX flag for gedit(-plugins)
+  * Removed "binary does not exist, cannot set flags" output
+  * Enabled forced xattr mode
+  * Added a REPLACEMENT mode for JSON binary path replacement strings
+  * Added support for different locales for torbrowser-launcher config 
+  * Added PaX flags for yelp, grep, openjdk8
+  * Added PaX flags for calamares 
+  * Added PaX flags for gnome-terminal-server
+
+ -- David McKinney <mckinney@subgraph.com>  Tue, 12 Jul 2016 16:55:34 +0000
+
+paxrat (1.0) unstable; urgency=low
+
+  * Initial Release.
+
+ -- David McKinney <mckinney@subgraph.com>  Tue, 07 Jul 2015 19:38:23 -0400
