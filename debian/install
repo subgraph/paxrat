@@ -1,4 +1,3 @@
-paxrat sbin/
 paxrat.conf etc/paxrat/
 paxrat_tbl.conf etc/paxrat/
-70paxrat etc/apt/apt.conf.d/
+etc/apt/apt.conf.d/70paxrat etc/apt/apt.conf.d/

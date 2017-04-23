@@ -1,9 +1,10 @@
 Source: paxrat
 Section: admin
 Priority: optional
-Maintainer: Santiago Ruano Rincón <santiagorr@riseup.net>
+Maintainer: Alexsandr Kibal <ak@subgraph.com>
 Build-Depends: debhelper (>= 9),
                dh-golang,
+               dh-systemd,
                golang-go,
                golang-golang-x-exp-dev,
                go-md2man
@@ -12,7 +13,7 @@ Homepage: https://subgraph.com/sgos/index.en.html
 
 Package: paxrat
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}
+Depends: ${shlibs:Depends}, ${misc:Depends}, lsb-base (>= 3.0-6)
 Recommends: paxctl
 Description: PaX flags management tool.
  PaX implements least privilege protections for memory pages in the
