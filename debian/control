@@ -7,7 +7,8 @@ Build-Depends: debhelper (>= 9),
                dh-systemd,
                golang-go,
                golang-golang-x-exp-dev,
-               go-md2man
+               go-md2man,
+               golang-subgraph-inotify-dev
 Standards-Version: 3.9.8
 Homepage: https://subgraph.com/sgos/index.en.html
 
