@@ -1,3 +1,11 @@
+paxrat (1.31.0-1) UNRELEASED; urgency=medium
+
+  * Non-maintainer upload.
+  * Updated to version 1.31.0 (adds PaX flags for TBL plugin-container)
+  * Changed build rules to use "-buildmode=pie"
+
+ -- David McKinney <mckinney@subgraph.com>  Thu, 08 Jun 2017 14:21:48 +0000
+
 paxrat (1.30.0-1.1) unstable; urgency=medium
 
   * Non-maintainer upload.
