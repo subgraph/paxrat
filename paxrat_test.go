@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-func createTestConfig(path string, contents string) error {
+func createTestConfig(path string, contents string) (err error) {
 	err = ioutil.WriteFile(path, []byte(contents), 0600)
 	if err != nil {
 		return err
