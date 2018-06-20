@@ -34,6 +34,7 @@ var optionalConfigDirectory = path.Join(configDirectory, "conf.d/")
 var configvar string
 var testvar bool
 var xattrvar bool
+var paxctlvar bool
 var watchvar bool
 var flagsvar string
 var binaryvar string
@@ -81,6 +82,8 @@ func init() {
 		"Test the config file and then exit")
 	flag.BoolVar(&xattrvar, "x", false,
 		"Force use of xattr to set PaX flags")
+	flag.BoolVar(&paxctlvar, "p", false,
+		"Force use of paxctl to set PaX flags")
 	flag.BoolVar(&watchvar, "w", false,
 		"Run paxrat in watch mode")
 	flag.StringVar(&flagsvar, "s", "",
@@ -341,6 +344,9 @@ func isXattrSupported() (bool, error) {
 	if xattrvar {
 		return true, err
 	}
+	if paxctlvar {
+		return false, err
+	}
 	result := true
 	setXattrErr := syscall.Setxattr("/proc/self/exe", "user.test xattr", []byte("test xattr data"), 0)
 	if setXattrErr != nil {
@@ -461,6 +467,9 @@ func main() {
 	if quietvar && !verbosevar {
 		log.SetOutput(ioutil.Discard)
 	}
+	if xattrvar && paxctlvar {
+		log.Fatal("All set flags mode are forced, only one can be forced (xattr|paxctl)\n")
+	}
 	if testvar {
 		log.Printf("Reading config from: %s\n", configvar)
 		_, err := readConfig(configvar)
@@ -479,6 +488,9 @@ func main() {
 		var mergedConfig *Config
 		if xattrvar {
 			log.Println("Running forced xattr mode")
+		}
+		if paxctlvar {
+			log.Println("Running forced paxctl mode")
 		}
 		log.Printf("Reading config from: %s\n", configvar)
 		conf, err := readConfig(configvar)
