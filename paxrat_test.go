@@ -12,7 +12,7 @@ import (
 )
 
 func createTestConfig(path string, contents string) error {
-	err = ioutil.WriteFile(path, []byte(contents), 0600)
+	err := ioutil.WriteFile(path, []byte(contents), 0600)
 	if err != nil {
 		return err
 	}
