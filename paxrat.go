@@ -21,7 +21,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/subgraph/inotify"
+	"github.com/fsnotify/fsnotify"
 )
 
 const ioctlReadTermios = 0x5401
@@ -55,8 +55,6 @@ type Config struct {
 	Settings map[string]Setting
 }
 
-var InotifyFlags uint32
-var InotifyDirFlags uint32
 var LogWriter *syslog.Writer
 var SyslogError error
 
@@ -71,35 +69,30 @@ func init() {
 	} else {
 		log.SetOutput(io.MultiWriter(os.Stdout, LogWriter))
 	}
-	InotifyFlags = (inotify.IN_DONT_FOLLOW | inotify.IN_ATTRIB |
-		inotify.IN_CREATE | inotify.IN_DELETE_SELF | inotify.IN_MOVE_SELF |
-		inotify.IN_MOVED_TO)
-	InotifyDirFlags = (inotify.IN_DONT_FOLLOW | inotify.IN_CREATE |
-		inotify.IN_DELETE_SELF | inotify.IN_MOVE_SELF | inotify.IN_MOVED_TO)
 	flag.StringVar(&configvar, "c", defaultConfigPath,
-		"Pax flags configuration file")
+	"Pax flags configuration file")
 	flag.BoolVar(&testvar, "t", false,
-		"Test the config file and then exit")
+	"Test the config file and then exit")
 	flag.BoolVar(&xattrvar, "x", false,
-		"Force use of xattr to set PaX flags")
+	"Force use of xattr to set PaX flags")
 	flag.BoolVar(&paxctlvar, "p", false,
-		"Force use of paxctl to set PaX flags")
+	"Force use of paxctl to set PaX flags")
 	flag.BoolVar(&watchvar, "w", false,
-		"Run paxrat in watch mode")
+	"Run paxrat in watch mode")
 	flag.StringVar(&flagsvar, "s", "",
-		"Set PaX flags for a single binary (must also specify binary)")
+	"Set PaX flags for a single binary (must also specify binary)")
 	flag.BoolVar(&nonrootvar, "n", false,
-		"Set nonroot variable for a single binary (needed to set flags on a non-root owned binary)")
+	"Set nonroot variable for a single binary (needed to set flags on a non-root owned binary)")
 	flag.BoolVar(&nodivertvar, "d", false,
-		"Disable checking for dpkg-divert original path (generally this should be enabled)")
+	"Disable checking for dpkg-divert original path (generally this should be enabled)")
 	flag.StringVar(&binaryvar, "b", "",
-		"Path to a binary for use with set option")
+	"Path to a binary for use with set option")
 	flag.StringVar(&replacementvar, "r", "",
-		"Replacement string to use in binary path JSON (ex: $REPLACEMENT in binary path)")
+	"Replacement string to use in binary path JSON (ex: $REPLACEMENT in binary path)")
 	flag.BoolVar(&quietvar, "q", false,
-		"Turn off all output/logging")
+	"Turn off all output/logging")
 	flag.BoolVar(&verbosevar, "v", false,
-		"Verbose output mode")
+	"Verbose output mode")
 
 }
 
@@ -166,7 +159,7 @@ func validateFlags(flags string) error {
 	match, _ := regexp.MatchString("(?i)[^pemrxs]", flags)
 	if match {
 		err = fmt.Errorf("bad characters found in PaX flags: %s",
-			flags)
+		flags)
 		return err
 	}
 	return nil
@@ -192,10 +185,7 @@ func setWithXattr(path string, flags string) error {
 func setWithPaxctl(path string, flags string) error {
 	exists := pathExists("/sbin/paxctl")
 	if !exists {
-		log.Printf(
-			"/sbin/paxctl does not exist, cannot set '%s' PaX flags on %s.\n",
-			flags, path)
-
+		log.Printf("/sbin/paxctl does not exist, cannot set '%s' PaX flags on %s.\n", flags, path)
 		return nil
 	}
 	flagsFmt := fmt.Sprintf("-%s", flags)
@@ -243,9 +233,7 @@ func setFlags(path string, flags string, nonroot, nodivert bool) error {
 	linkUid := fiPath.Sys().(*syscall.Stat_t).Uid
 	// Report error if nonroot option is not set but the file is owned by a user other than root
 	if !nonroot && linkUid > 0 {
-		err = fmt.Errorf(
-			"Cannot set PaX flags on %s. Owner of symlink did not match owner of symlink target\n",
-			path)
+		err = fmt.Errorf("Cannot set PaX flags on %s. Owner of symlink did not match owner of symlink target\n", path)
 		return err
 	}
 	// Resolve the symlink target
@@ -266,9 +254,7 @@ func setFlags(path string, flags string, nonroot, nodivert bool) error {
 	targetUid := fiRPath.Sys().(*syscall.Stat_t).Uid
 	// If nonroot is set then report an error if the owner of the file != owner of the symlink target
 	if nonroot && targetUid != linkUid {
-		err = fmt.Errorf(
-			"Cannot set PaX flags on %s. Owner of symlink did not match owner of symlink target\n",
-			path)
+		err = fmt.Errorf("Cannot set PaX flags on %s. Owner of symlink did not match owner of symlink target\n", path)
 		return err
 	}
 	if supported {
@@ -288,8 +274,8 @@ func setFlags(path string, flags string, nonroot, nodivert bool) error {
 	return err
 }
 
-func setFlagsWatchMode(watcher *inotify.Watcher, path string, flags string, nonroot, nodivert bool) error {
-	watcher.RemoveWatch(path)
+func setFlagsWatchMode(watcher *fsnotify.Watcher, path string, flags string, nonroot, nodivert bool) error {
+	watcher.Remove(path)
 	err := setFlags(path, flags, nonroot, nodivert)
 	if err != nil {
 		return err
@@ -374,20 +360,19 @@ func runningAsRoot() (bool, error) {
 	return result, err
 }
 
-func addWatchToClosestPath(watcher *inotify.Watcher, path string) {
-	err := watcher.AddWatch(path, InotifyFlags)
-	for err != nil && err.(*os.PathError).Err == syscall.ENOENT && path != "/" {
+func addWatchToClosestPath(watcher *fsnotify.Watcher, path string) {
+	err := watcher.Add(path)
+	for err != nil && err == syscall.ENOENT && path != "/" {
 		path = filepath.Dir(path)
 		if path != "/" {
-			err = watcher.AddWatch(path, InotifyDirFlags)
+			err = watcher.Add(path)
 		}
 	}
-
 }
 
-func initWatcher(config *Config) (*inotify.Watcher, error) {
+func initWatcher(config *Config) (*fsnotify.Watcher, error) {
 	log.Println("Initializing paxrat watcher")
-	watcher, err := inotify.NewWatcher()
+	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return watcher, err
 	}
@@ -402,64 +387,36 @@ func initWatcher(config *Config) (*inotify.Watcher, error) {
 }
 
 // TODO: Resolve some corner cases like watches not set after create, delete, create, move
-func runWatcher(watcher *inotify.Watcher, config *Config) {
+func runWatcher(watcher *fsnotify.Watcher, config *Config) {
 	log.Println("Starting paxrat watcher")
 	for {
 		select {
-		case ev := <-watcher.Event:
-			if ev.Mask == inotify.IN_CREATE {
-				if _, ok := (*config).Settings[ev.Name]; ok {
-					watcher.AddWatch(ev.Name, InotifyFlags)
-					if verbosevar {
-						log.Printf("File created: %s\n", ev.Name)
-					}
+		case ev := <-watcher.Events:
+			if ev.Op == fsnotify.Create {
+				watcher.Add(ev.Name)
+				if verbosevar {
+					log.Printf("File created: %s\n", ev.Name)
 				}
-				// Catch directory creation events for non-existent directories in executable path
-			} else if ev.Mask == (inotify.IN_CREATE | inotify.IN_ISDIR) {
-				for path, _ := range (*config).Settings {
-					if strings.HasPrefix(path, ev.Name) {
-						addWatchToClosestPath(watcher, path)
-					}
-				}
-			} else if ev.Mask == inotify.IN_DELETE_SELF || ev.Mask == inotify.IN_MOVE_SELF {
+			} else if ev.Op&fsnotify.Remove == fsnotify.Remove {
 				if _, ok := (*config).Settings[ev.Name]; ok {
 					if verbosevar {
 						log.Printf("File deleted: %s\n", ev.Name)
 					}
 					parent := filepath.Dir(ev.Name)
-					watcher.AddWatch(parent, InotifyDirFlags)
+					watcher.Add(parent)
 					continue
-				}
-			} else if ev.Mask == inotify.IN_ATTRIB {
-				if _, ok := (*config).Settings[ev.Name]; ok {
-					exists := pathExists(ev.Name)
-					if !exists {
-						if verbosevar {
-							log.Printf("File deleted: %s\n", ev.Name)
-						}
-						parent := filepath.Dir(ev.Name)
-						watcher.AddWatch(parent, InotifyDirFlags)
-						continue
-					} else {
-						if verbosevar {
-							log.Printf("File attributes changed: %s\n", ev.Name)
-						}
-					}
 				}
 			}
 			if settings, ok := (*config).Settings[ev.Name]; ok {
-				if ev.Mask != inotify.IN_IGNORED {
-					err := setFlagsWatchMode(watcher, ev.Name, settings.Flags, settings.Nonroot, settings.Nodivert)
-					if err != nil {
-						log.Printf("watch mode setFlags error: %s\n", err)
-					}
+				err := setFlagsWatchMode(watcher, ev.Name, settings.Flags, settings.Nonroot, settings.Nodivert)
+				if err != nil {
+					log.Printf("watch mode setFlags error: %s\n", err)
 				}
 			}
-		case err := <-watcher.Error:
+		case err := <-watcher.Errors:
 			log.Printf("watch mode watcher error: %s\n", err)
 		}
 	}
-	return
 }
 
 func main() {
@@ -499,24 +456,22 @@ func main() {
 		}
 		configs = append(configs, (*conf))
 		if configvar == defaultConfigPath &&
-			pathExists(optionalConfigDirectory) {
+		pathExists(optionalConfigDirectory) {
 			files, err := ioutil.ReadDir(optionalConfigDirectory)
 			if err != nil {
-				log.Printf(
-					"Could not read optional config directory: %s - %s\n",
-					optionalConfigDirectory, err)
+				log.Printf("Could not read optional config directory: %s - %s\n", optionalConfigDirectory, err)
 			}
 			for _, confFile := range files {
 				if !confFile.IsDir() {
 					confFilePath := path.Join(optionalConfigDirectory,
-						confFile.Name())
+					confFile.Name())
 					log.Printf("Reading config from: %s", confFilePath)
 					if pathExists(confFilePath) {
 						conf, err := readConfig(confFilePath)
 						if err != nil {
 							// Do not die fatally on bad optional config
 							log.Printf("Could not read config: %s - %s\n",
-								confFile.Name(), err)
+							confFile.Name(), err)
 						}
 						configs = append(configs, (*conf))
 					}
